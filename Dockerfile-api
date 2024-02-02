@@ -11,4 +11,4 @@ EXPOSE 5000
 # Define environment variable for Flask to run in production mode
 ENV FLASK_ENV=production
 # Run ann_api.py when the container launches
-CMD ["python", "api_test.py"]
+CMD ["python", "API1.py"]

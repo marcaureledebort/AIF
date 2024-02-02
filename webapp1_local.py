@@ -3,10 +3,13 @@ import requests
 import gradio as gr
 import io
 from PIL import Image 
-
+import functools
+import pickle
+from io import BytesIO 
 
 def reco_webapp(genre,year):
     rep=requests.post('http://127.0.0.1:5000/reco',json={'genre':genre,'year':year})
+
     data=rep.json()
 
     if data['title']=={}:
@@ -22,6 +25,7 @@ def reco_webapp(genre,year):
 
 def reco_plot_webapp(title):
     rep=requests.post('http://127.0.0.1:5000/reco_plot',json={'title':title})
+    #rep=requests.post('http://annoy-db:5000/reco_plot',json={'title':title})
     if rep.status_code==200 :
         data=rep.json()   
         msg="Voici les films les plus proches de "+title +" en fonction de son plot \n"
@@ -33,7 +37,58 @@ def reco_plot_webapp(title):
 
 def reco_poster_webapp(numero):
     response = requests.post("http://127.0.0.1:5000/reco_poster", json={"numero":numero}).json()
+    #response = requests.post("http://annoy-db:5000/reco_poster", json={"numero":numero}).json()
     return [Image.open(i) for i in response['paths']]
+
+def reco_poster_webapp_bis(image):
+    image_bytes = BytesIO()
+    image_pil = Image.fromarray(image)
+    image_pil.save(image_bytes, format="JPEG")
+    files = {'image': ('image.jpg', image_bytes.getvalue())}
+    response = requests.post("http://127.0.0.1:5000/reco_poster_bis", files=files).json
+    #response = requests.post("http://annoy-db:5000/reco_poster", json={"numero":numero}).json()
+    return [Image.open(i) for i in response['paths']]
+
+
+
+
+with open('Data.pk','rb') as f : 
+    data_2=pickle.load(f)
+    
+def process_text(text,method,number_neighbor):
+    #On choisit la méthode
+    if method=="Bag of Words":
+        response=requests.post('http://127.0.0.1:5000/text_reco',json={'text': text})
+    else:
+        response=requests.post("http://127.0.0.1:5000/text_reco_glove",json={'text': text})
+    #Maintenant que l'on a choisi la méthode, on regarde si le statut code renvoie une erreur ou pas
+    if response.status_code == 200:
+        indices=response.json()['indices']
+        titles=data_2.original_title.iloc[indices]
+        overviews=data_2.overview.iloc[indices]
+
+        return titles.tolist()[number_neighbor], overviews.tolist()[number_neighbor]
+    else:
+        return "Error in API request"   
+    
+with gr.Blocks() as demo:
+    text=gr.Textbox(label='Write your movie description')
+    method=gr.Radio(["Bag of Words","Glove"],label="Choose your method")
+    btn = gr.Button(value="Submit")
+        
+
+    with gr.Accordion(label="Similar movies", open=True):
+        for i in range(5):
+            with gr.Row():
+                title_output = gr.Textbox(label='Title')
+                overview_output = gr.Textbox(label='Overview')
+                btn.click(functools.partial(process_text,number_neighbor=i), inputs=[text, method], outputs=[title_output, overview_output])
+
+
+
+
+
+
 
 if __name__=='__main__':
     response = requests.get('http://127.0.0.1:5000/infos')
@@ -69,4 +124,12 @@ if __name__=='__main__':
                 description="Entrez un titre de film",
                 )
     
-    gr.TabbedInterface([i1,i2,i3],["Recommandation par score IMdB","Recommandation par poster","Recommandation par plot"]).launch()
+    i4=gr.Interface(fn=reco_poster_webapp_bis, 
+                inputs='image', 
+                outputs=['image','image','image','image','image'],
+                description="Entrez un titre de film",
+                )
+    
+
+
+    gr.TabbedInterface([i1,i2,i3,i4,demo],["Recommandation par score IMdB","Recommandation par poster","Recommandation par plot","reco poster bis","Reco new"]).launch()
