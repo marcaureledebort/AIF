@@ -1,0 +1,13 @@
+flask 
+annoy
+pandas
+numpy
+PIL
+sklearn
+nltk
+re
+pickle
+requests
+gradio
+functools
+gensim
